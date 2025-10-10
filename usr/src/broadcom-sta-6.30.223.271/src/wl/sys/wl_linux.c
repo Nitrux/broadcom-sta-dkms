@@ -97,13 +97,15 @@ struct iw_statistics *wl_get_wireless_stats(struct net_device *dev);
 
 #include <wlc_wowl.h>
 
-static void wl_timer(
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0)
-		struct timer_list *tl
-#else
-		ulong data
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0))
+#define PDE_DATA pde_data
 #endif
-		);
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0)
+static void wl_timer(struct timer_list *tl);
+#else
+static void wl_timer(ulong data);
+#endif
 static void _wl_timer(wl_timer_t *t);
 static struct net_device *wl_alloc_linux_if(wl_if_t *wlif);
 
@@ -166,8 +168,9 @@ static int wl_set_radio_block(void *data, bool blocked);
 static void wl_report_radio_state(wl_info_t *wl);
 #endif
 
+// Rel. commit "modpost: require a MODULE_DESCRIPTION()" (Jeff Johnson, 11 Mar 2025)
+MODULE_DESCRIPTION("Broadcom-wl wireless driver [unmaintained, out-of-tree]");
 MODULE_LICENSE("MIXED/Proprietary");
-MODULE_DESCRIPTION("Broadcom STA Wireless driver");
 
 static struct pci_device_id wl_id_table[] =
 {
@@ -497,6 +500,12 @@ wl_if_setup(struct net_device *dev)
 #endif
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0)
+static inline void eth_hw_addr_set(struct net_device *dev, const void *addr) {
+	memcpy(dev->dev_addr, addr, ETHER_ADDR_LEN);
+}
+#endif
+
 static wl_info_t *
 wl_attach(uint16 vendor, uint16 device, ulong regs,
 	uint bustype, void *btparam, uint irq, uchar* bar1_addr, uint32 bar1_size)
@@ -593,17 +602,10 @@ wl_attach(uint16 vendor, uint16 device, ulong regs,
 	}
 	wl->bcm_bustype = bustype;
 
-	#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0)
 	if ((wl->regsva = ioremap(dev->base_addr, PCI_BAR0_WINSZ)) == NULL) {
 		WL_ERROR(("wl%d: ioremap() failed\n", unit));
 		goto fail;
 	}
-	#else
-	if ((wl->regsva = ioremap_nocache(dev->base_addr, PCI_BAR0_WINSZ)) == NULL) {
-		WL_ERROR(("wl%d: ioremap() failed\n", unit));
-		goto fail;
-	}
-	#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0) */
 
 	wl->bar1_addr = bar1_addr;
 	wl->bar1_size = bar1_size;
@@ -633,10 +635,6 @@ wl_attach(uint16 vendor, uint16 device, ulong regs,
 
 	wlc_iovar_setint(wl->wlc, "scan_passive_time", 170);
 
-	/* NOTICE: The driver's `qtxpower` option takes values from 0 to
-	 * 127, which correspond to (dBm * 4). This seems to be a half-done
-	 * implementation of their own API. The brcmfmac kernel driver
-	 * confirms this. */
 	wlc_iovar_setint(wl->wlc, "qtxpower", 23 * 4);
 
 #ifdef BCMDBG
@@ -652,11 +650,7 @@ wl_attach(uint16 vendor, uint16 device, ulong regs,
 			WL_ERROR(("wl%d: Error setting MAC ADDRESS\n", unit));
 	}
 #endif 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 17, 0)
-	bcopy(&wl->pub->cur_etheraddr, dev->dev_addr, ETHER_ADDR_LEN);
-#else
 	eth_hw_addr_set(dev, wl->pub->cur_etheraddr.octet);
-#endif
 
 	online_cpus = 1;
 
@@ -750,7 +744,7 @@ wl_attach(uint16 vendor, uint16 device, ulong regs,
 		WL_ALL_PASSIVE_ENAB(wl) ?  ", Passive Mode" : "", EPI_VERSION_STR);
 
 #ifdef BCMDBG
-	printf(" (Compiled in " SRCBASE);
+	printf(" (Compiled in " SRCBASE " at " __TIME__ " on " __DATE__ ")");
 #endif 
 	printf("\n");
 
@@ -797,18 +791,11 @@ wl_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	pci_read_config_dword(pdev, 0x40, &val);
 	if ((val & 0x0000ff00) != 0)
 		pci_write_config_dword(pdev, 0x40, val & 0xffff00ff);
-
-	bar1_size = pci_resource_len(pdev, 2);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0)
-	bar1_addr = (uchar *)ioremap(pci_resource_start(pdev, 2),
-				     bar1_size);
-#else
-	bar1_addr = (uchar *)ioremap_nocache(pci_resource_start(pdev, 2),
-					     bar1_size);
-#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0) */
-
+		bar1_size = pci_resource_len(pdev, 2);
+		bar1_addr = (uchar *)ioremap(pci_resource_start(pdev, 2),
+			bar1_size);
 	wl = wl_attach(pdev->vendor, pdev->device, pci_resource_start(pdev, 0), PCI_BUS, pdev,
-		       pdev->irq, bar1_addr, bar1_size);
+		pdev->irq, bar1_addr, bar1_size);
 
 	if (!wl)
 		return -ENODEV;
@@ -929,11 +916,11 @@ static struct pci_driver wl_pci_driver __refdata = {
 static int __init
 wl_module_init(void)
 {
+	printk(KERN_WARNING "You are using the broadcom-wl driver, which is not "
+		"maintained and is incompatible with Linux kernel security mitigations. "
+		"It is heavily recommended to replace the hardware and remove the driver. "
+		"Proceed at your own risk!");
 	int error = -ENODEV;
-
-#ifdef CONFIG_X86_KERNEL_IBT
-	printk(KERN_WARNING "wl: This driver includes a binary blob incompatible with IBT protection, available since Intel Core Tiger Lake (11th gen, 2020). If your CPU is older you can ignore the 'Unpatched return thunk in use' warnings caused by this driver. You can disable IBT by adding `ibt=off` to your kernel boot options.");
-#endif
 
 #ifdef BCMDBG
 	if (msglevel != 0xdeadbeef)
@@ -1117,9 +1104,8 @@ wl_open(struct net_device *dev)
 	}
 	WL_UNLOCK(wl);
 
-	if (!error) {
+	if (!error)
 		OLD_MOD_INC_USE_COUNT;
-	}
 
 #if defined(USE_CFG80211)
 	if (wl_cfg80211_up(dev)) {
@@ -1694,7 +1680,11 @@ wl_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 	}
 
 	WL_LOCK(wl);
-	bcmerror = wlc_ioctl(wl->wlc, ioc.cmd, buf, ioc.len, wlif->wlcif);
+	if (!capable(CAP_NET_ADMIN)) {
+		bcmerror = BCME_EPERM;
+	} else {
+		bcmerror = wlc_ioctl(wl->wlc, ioc.cmd, buf, ioc.len, wlif->wlcif);
+	}
 	WL_UNLOCK(wl);
 
 done1:
@@ -1864,21 +1854,15 @@ wl_set_mac_address(struct net_device *dev, void *addr)
 	WL_TRACE(("wl%d: wl_set_mac_address\n", wl->pub->unit));
 
 	WL_LOCK(wl);
+
+	eth_hw_addr_set(dev, sa->sa_data);
 	err = wlc_iovar_op(wl->wlc, "cur_etheraddr", NULL, 0, sa->sa_data, ETHER_ADDR_LEN,
 		IOV_SET, (WL_DEV_IF(dev))->wlcif);
 	WL_UNLOCK(wl);
-	if (err) {
+	if (err)
 		WL_ERROR(("wl%d: wl_set_mac_address: error setting MAC addr override\n",
 			wl->pub->unit));
-		return OSL_ERROR(err);
-	} else {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 17, 0)
-		bcopy(sa->sa_data, dev->dev_addr, ETHER_ADDR_LEN);
-#else
-        eth_hw_addr_set(dev, sa->sa_data);
-#endif
-		return 0;
-	}
+	return err;
 }
 
 static void
@@ -2123,7 +2107,8 @@ wl_osl_pcie_rc(struct wl_info *wl, uint op, int param)
 void
 wl_dump_ver(wl_info_t *wl, struct bcmstrbuf *b)
 {
-	bcm_bprintf(b, "wl%d: version %s\n", wl->pub->unit, EPI_VERSION_STR);
+	bcm_bprintf(b, "wl%d: %s %s version %s\n", wl->pub->unit,
+		__DATE__, __TIME__, EPI_VERSION_STR);
 }
 
 #if defined(BCMDBG)
@@ -2228,9 +2213,8 @@ wl_start(struct sk_buff *skb, struct net_device *dev)
 	wl_if_t *wlif;
 	wl_info_t *wl;
 
-	if (!dev) {
+	if (!dev)
 		return -ENETDOWN;
-	}
 
 	wlif = WL_DEV_IF(dev);
 	wl = WL_INFO(dev);
@@ -2265,10 +2249,9 @@ wl_start(struct sk_buff *skb, struct net_device *dev)
 			if (!err) {
 				atomic_inc(&wl->callbacks);
 				wl->txq_dispatched = TRUE;
-			} else {
+			} else
 				WL_ERROR(("wl%d: wl_start/schedule_work failed\n",
 				          wl->pub->unit));
-			}
 		}
 
 		TXQ_UNLOCK(wl);
@@ -2368,21 +2351,16 @@ wl_timer_task(wl_task_t *task)
 	atomic_dec(&t->wl->callbacks);
 }
 
-static void
-wl_timer(
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0)
-		struct timer_list *tl
+static void
+wl_timer(struct timer_list *tl)
+{
+	wl_timer_t *t = (wl_timer_t *)tl;
 #else
-		ulong data
-#endif
-) {
-	wl_timer_t *t =
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
-		timer_container_of(t, tl, timer);
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0)
-		from_timer(t, tl, timer);
-#else
-		(wl_timer_t *)data;
+static void
+wl_timer(ulong data)
+{
+	wl_timer_t *t = (wl_timer_t *)data;
 #endif
 
 	if (!WL_ALL_PASSIVE_ENAB(t->wl))
@@ -2485,7 +2463,12 @@ wl_del_timer(wl_info_t *wl, wl_timer_t *t)
 	ASSERT(t);
 	if (t->set) {
 		t->set = FALSE;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
+		// Rel. commit "treewide: Switch/rename to timer_delete[_sync]()" (Thomas Gleixner, 5 Apr 2025)
 		if (!timer_delete(&t->timer)) {
+#else
+		if (!del_timer(&t->timer)) {
+#endif
 #ifdef BCMDBG
 			WL_INFORM(("wl%d: Failed to delete timer %s\n", wl->unit, t->name));
 #endif
@@ -3052,11 +3035,7 @@ _wl_add_monitor_if(wl_task_t *task)
 	else
 		dev->type = ARPHRD_IEEE80211_RADIOTAP;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 17, 0)
-	bcopy(wl->dev->dev_addr, dev->dev_addr, ETHER_ADDR_LEN);
-#else
 	eth_hw_addr_set(dev, wl->dev->dev_addr);
-#endif
 
 #if defined(WL_USE_NETDEV_OPS)
 	dev->netdev_ops = &wl_netdev_monitor_ops;
@@ -3337,11 +3316,7 @@ wl_proc_read(char *buffer, char **start, off_t offset, int length, int *eof, voi
 static ssize_t
 wl_proc_read(struct file *filp, char __user *buffer, size_t length, loff_t *offp)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 17, 0)
 	wl_info_t * wl = PDE_DATA(file_inode(filp));
-#else
-	wl_info_t * wl = pde_data(file_inode(filp));
-#endif
 #endif
 	int bcmerror, len;
 	int to_user = 0;
@@ -3398,11 +3373,7 @@ wl_proc_write(struct file *filp, const char *buff, unsigned long length, void *d
 static ssize_t
 wl_proc_write(struct file *filp, const char __user *buff, size_t length, loff_t *offp)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 17, 0)
 	wl_info_t * wl = PDE_DATA(file_inode(filp));
-#else
-	wl_info_t * wl = pde_data(file_inode(filp));
-#endif
 #endif
 	int from_user = 0;
 	int bcmerror;
@@ -3437,9 +3408,9 @@ wl_proc_write(struct file *filp, const char __user *buff, size_t length, loff_t 
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0)
-static const struct proc_ops wl_fops = {
-	.proc_read	= wl_proc_read,
-	.proc_write	= wl_proc_write,
+static struct proc_ops wl_fops = {
+        .proc_read     = wl_proc_read,
+        .proc_write    = wl_proc_write,
 };
 #else
 static const struct file_operations wl_fops = {
@@ -3447,8 +3418,8 @@ static const struct file_operations wl_fops = {
 	.read	= wl_proc_read,
 	.write	= wl_proc_write,
 };
-#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0) */
-#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0) */
+#endif
+#endif
 
 static int
 wl_reg_proc_entry(wl_info_t *wl)

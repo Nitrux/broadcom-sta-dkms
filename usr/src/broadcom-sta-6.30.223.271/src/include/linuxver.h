@@ -147,14 +147,9 @@ typedef irqreturn_t(*FN_ISR) (int irq, void *dev_id, struct pt_regs *ptregs);
 #include <linux/sched.h>
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 29)
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
-#include "lib80211.h"
-#else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 29) && LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 #include <net/lib80211.h>
 #endif
-#endif
-
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 29)
 #include <linux/ieee80211.h>
 #else
@@ -346,27 +341,13 @@ static inline void tasklet_init(struct tasklet_struct *tasklet,
 }
 #define tasklet_kill(tasklet)	{ do {} while (0); }
 
+#define del_timer_sync(timer) del_timer(timer)
+
 #else
 
 #define netif_down(dev)
 
 #endif 
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2, 3, 43))
-
-#define timer_delete(timer)             del_timer(timer)
-#define timer_delete_sync(timer)        del_timer(timer)
-
-#elif (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 83))
-
-#define timer_delete(timer)             del_timer(timer)
-#define timer_delete_sync(timer)        del_timer_sync(timer)
-
-#elif (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 91))
-
-#define timer_delete(timer)             del_timer(timer)
-
-#endif
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2, 4, 3))
 

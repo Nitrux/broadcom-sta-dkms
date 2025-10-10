@@ -1875,7 +1875,7 @@ wl_iw_set_encodeext(
 #if WIRELESS_EXT > 17
 struct {
 	pmkid_list_t pmkids;
-	pmkid_t foo[MAXPMKID];
+	pmkid_t foo[MAXPMKID-1];
 } pmkid_list;
 static int
 wl_iw_set_pmksa(
@@ -1898,7 +1898,7 @@ wl_iw_set_pmksa(
 		bzero((char *)&pmkid_list, sizeof(pmkid_list));
 	}
 	if (iwpmksa->cmd == IW_PMKSA_REMOVE) {
-		struct { pmkid_t pmkid[1]; } pmkid, *pmkidptr;
+		pmkid_list_t pmkid, *pmkidptr;
 		pmkidptr = &pmkid;
 		bcopy(&iwpmksa->bssid.sa_data[0], &pmkidptr->pmkid[0].BSSID, ETHER_ADDR_LEN);
 		bcopy(&iwpmksa->pmkid[0], &pmkidptr->pmkid[0].PMKID, WPA2_PMKID_LEN);
