@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+
+
+%:
+	dh $@
+
+override_dh_install:
+	dh_install
+	install -D -m 0644 \
+		usr/src/broadcom-sta-6.30.223.271/lib/wlc_hybrid.o_amd64 \
+		debian/broadcom-sta-dkms/usr/lib/broadcom-wl-dkms/wlc_hybrid.o_shipped

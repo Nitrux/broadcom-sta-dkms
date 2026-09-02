@@ -20,22 +20,16 @@
 
 ifneq ($(KERNELRELEASE),)
 
-  VERSION := $(shell echo $(KERNELRELEASE) | sed -e 's/\([0-9]*\)[.]\([0-9]*\)\(.*\)/\1/')
-  PATCHLEVEL := $(shell echo $(KERNELRELEASE) | sed -e 's/\([0-9]*\)[.]\([0-9]*\)\(.*\)/\2/')
-  SUBLEVEL := $(shell echo $(KERNELRELEASE) | sed -e 's/\([0-9]*\)[.]\([0-9]*\)[.]\([0-9]*\)\(.*\)/\3/; s/\([0-9]*\)[.]\([0-9]*\)\(.*\)/0/')
-
-  # >= 2.6.32
   LINUXVER_GOODFOR_CFG80211:=$(strip $(shell \
-    if [ "$(VERSION).$(PATCHLEVEL)" = "2.6" -a "$(SUBLEVEL)" -ge "32" ] || [ "$(VERSION)" -eq "2" -a "$(PATCHLEVEL)" -ge "7" ] || [ "$(VERSION)" -ge "3" ]; then \
+    if [ "$(VERSION)" -ge "2" -a "$(PATCHLEVEL)" -ge "6" -a "$(SUBLEVEL)" -ge "32" -o "$(VERSION)" -ge "3" ]; then \
       echo TRUE; \
     else \
       echo FALSE; \
     fi \
   ))
 
-  # < 2.6.17
     LINUXVER_WEXT_ONLY:=$(strip $(shell \
-    if [ "$(VERSION).$(PATCHLEVEL)" = "2.6" -a "$(SUBLEVEL)" -ge "17" ] || [ "$(VERSION)" -eq "2" -a "$(PATCHLEVEL)" -ge "7" ] || [ "$(VERSION)" -ge "3" ]; then \
+    if [ "$(VERSION)" -ge "2" -a "$(PATCHLEVEL)" -ge "6" -a "$(SUBLEVEL)" -ge "17" ]; then \
       echo FALSE; \
     else \
       echo TRUE; \
@@ -121,7 +115,7 @@ GCCVERSION += 00
 GCCVERSION := $(subst $(space),$(empty),$(GCCVERSION))
 # Crop the version number to 3 decimals.
 GCCVERSION := $(shell expr `echo $(GCCVERSION)` | cut -b1-3)
-GE_49 := $(shell expr `echo $(GCCVERSION)` \>= 490)
+GE_49 := 1
 
 ccflags-y :=
 
@@ -151,33 +145,30 @@ ifeq "$(GE_49)" "1"
 ccflags-y          += -Wno-date-time
 endif
 
-# Look for kernel architecture.
-# Check for a config symbol that should always be defined, so we don't
-# fail on 'make clean' which doesn't include .config
-ifeq ($(CONFIG_NET),y)
-    ifeq ($(CONFIG_X86_32),y)
-        SHIPPED=wlc_hybrid.o_i386
-        $(info Kernel architecture is X86_32)
-    else
-        ifeq ($(CONFIG_X86_64),y)
-            SHIPPED=wlc_hybrid.o_amd64
-            $(info Kernel architecture is X86_64)
-        else # Error!
-            $(error Unsupported kernel architecture)
-        endif
-    endif
-endif
+ldflags-y          := /usr/lib/broadcom-wl-dkms/wlc_hybrid.o_shipped
 
-ldflags-y          := $(src)/lib/$(SHIPPED)
-
-KVER               ?= $(shell uname -r)
-KBASE              ?= /lib/modules/$(KVER)
+KBASE              ?= /lib/modules/`uname -r`
 KBUILD_DIR         ?= $(KBASE)/build
 MDEST_DIR          ?= $(KBASE)/kernel/drivers/net/wireless
 
 # Cross compile setup.  Tool chain and kernel tree, replace with your own.
 CROSS_TOOLS        = /path/to/tools
 CROSS_KBUILD_DIR   = /path/to/kernel/tree
+
+# Rel. commit "objtool: Always fail on fatal errors" (Josh Poimboeuf, 31 Mar 2025)
+# This is a *ugly* hack to disable objtool during the final processing of wl.o.
+# Since is embeds the proprietary blob (wlc_hybrid.o_shipped), objtool can't
+# process it, as it does not follow the requirements of current kernels,
+# including support for critical security features. As of Linux v6.15+, it causes
+# a build error. Disable it, at your own risk. Note the MIT license applies:
+# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+wl.o: override objtool-enabled =
 
 all:
 	KBUILD_NOPEDANTIC=1 make -C $(KBUILD_DIR) M=`pwd`

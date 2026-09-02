@@ -1,0 +1,25 @@
+Source: broadcom-sta-dkms
+Section: non-free/kernel
+Priority: optional
+Maintainer: Uri Herrera <uri_herrera@nxos.org>
+Build-Depends:
+ debhelper-compat (= 13),
+ dh-sequence-dkms,
+ dkms
+Standards-Version: 4.6.2
+Homepage: https://github.com/Nitrux/broadcom-sta-dkms
+Rules-Requires-Root: no
+
+
+Package: broadcom-sta-dkms
+Architecture: amd64
+Depends: dkms (>= 2.1.0.0), ${misc:Depends}
+Recommends: wireless-tools
+Conflicts: broadcom-sta-modules
+Provides: broadcom-sta-modules
+Description: DKMS source for the Broadcom STA wireless driver
+ Broadcom STA is a binary-only device driver for certain Broadcom
+ IEEE 802.11a/b/g/n wireless network cards.
+ .
+ This package provides the source code for the wl kernel module and uses
+ DKMS to build and install it for the installed kernels.

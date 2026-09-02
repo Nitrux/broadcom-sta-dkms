@@ -1,0 +1,5 @@
+etc /
+usr/share /
+usr/src/broadcom-sta-6.30.223.271/Makefile usr/src/broadcom-wl-6.30.223.271
+usr/src/broadcom-sta-6.30.223.271/dkms.conf usr/src/broadcom-wl-6.30.223.271
+usr/src/broadcom-sta-6.30.223.271/src usr/src/broadcom-wl-6.30.223.271

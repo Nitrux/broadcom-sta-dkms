@@ -1,5 +1,5 @@
 # Ignore the proprietary blobs
-broadcom-sta-dkms: unstripped-binary-or-object *lib/wlc_hybrid.o_*
-broadcom-sta-dkms: spelling-error-in-binary *lib/wlc_hybrid.o_*
+broadcom-sta-dkms: unstripped-binary-or-object *wlc_hybrid.o_shipped
+broadcom-sta-dkms: spelling-error-in-binary *wlc_hybrid.o_shipped
 
-broadcom-sta-dkms: repeated-path-segment src [usr/src/broadcom-sta-*/src/]
+broadcom-sta-dkms: repeated-path-segment src [usr/src/broadcom-wl-*/src/]
