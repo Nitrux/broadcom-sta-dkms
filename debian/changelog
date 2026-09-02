@@ -1,5 +1,5 @@
-broadcom-sta-dkms (6.30.223.271-1) nitrux; urgency=medium
+broadcom-sta-dkms (6.30.223.271-48+nitrux) nitrux; urgency=medium
 
   * Create the Nitrux DKMS package for the Broadcom STA wireless driver.
 
- -- Uri Herrera <uri_herrera@nxos.org>  Tue, 01 Sep 2026 00:00:00 -0600
+ -- Uri Herrera <uri_herrera@nxos.org>  Tue, 01 Sep 2026 22:42:00 -0500
