@@ -1,3 +1,9 @@
+broadcom-sta-dkms (6.30.223.271-49+nitrux) nitrux; urgency=medium
+
+  * Install shared package files under /usr/share.
+
+ -- Uri Herrera <uri_herrera@nxos.org>  Thu, 01 Oct 2026 00:28:28 -0600
+
 broadcom-sta-dkms (6.30.223.271-48+nitrux) nitrux; urgency=medium
 
   * Create the Nitrux DKMS package for the Broadcom STA wireless driver.
